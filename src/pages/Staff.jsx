@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Plus, Loader2, UserCog, Mail, Phone, Shield } from "lucide-react";
+import { Plus, Loader2, UserCog, Mail, Phone, Shield, Crown } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
@@ -194,15 +194,27 @@ export default function Staff() {
                   >
                     <div className="flex items-start gap-3 mb-3">
                       <div
-                        className="h-11 w-11 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0"
-                        style={{ background: "var(--green-700)" }}
+                        className="h-11 w-11 rounded-full flex items-center justify-center text-white font-semibold text-sm flex-shrink-0 relative"
+                        style={{ background: s.role === "head_teacher" ? "linear-gradient(135deg, #fbbf24, #d97706)" : "var(--green-700)" }}
                       >
                         {(s.full_name || s.email || "?").slice(0, 2).toUpperCase()}
+                        {s.role === "head_teacher" && (
+                          <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-yellow-500 flex items-center justify-center ring-2 ring-white">
+                            <Crown className="h-3 w-3 text-white" />
+                          </span>
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h4 className="font-medium text-stone-900 truncate text-sm">
-                          {s.full_name || s.email}
-                        </h4>
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="font-medium text-stone-900 truncate text-sm">
+                            {s.full_name || s.email}
+                          </h4>
+                          {s.role === "head_teacher" && (
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold" style={{ background: "#fef3c7", color: "#92400e" }}>
+                              PRO
+                            </span>
+                          )}
+                        </div>
                         <span
                           className={`inline-block mt-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-medium ${
                             ROLE_BADGE_COLOR[s.role] || "bg-stone-100 text-stone-700"
