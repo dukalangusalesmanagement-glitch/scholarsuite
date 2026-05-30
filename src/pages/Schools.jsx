@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import {
   Plus, Building2, Edit3, Trash2, Loader2, Crown, CheckCircle2,
-  UserPlus, Sparkles, ChevronRight, ChevronDown
+  UserPlus, Sparkles, Phone, Mail, MapPin, Layers, Users,
+  CreditCard, Award, Star, Zap, Lock, AlertCircle, User
 } from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 import { supabase } from "../lib/supabase";
@@ -10,7 +11,6 @@ import PageHeader from "../components/PageHeader";
 import Toolbar from "../components/Toolbar";
 import StatusPill from "../components/StatusPill";
 import Modal from "../components/Modal";
-import Field, { inputClass } from "../components/Field";
 
 const EMPTY_SCHOOL = {
   name: "",
@@ -22,7 +22,7 @@ const EMPTY_SCHOOL = {
   region: "",
   plan: "basic",
   status: "trial",
-  monthly_fee: 0,
+  monthly_fee: 500000,
   student_count: 0
 };
 
@@ -35,6 +35,85 @@ const EMPTY_ADMIN = {
   password: ""
 };
 
+const PLAN_DETAILS = {
+  basic:      { fee: 500000,  icon: Layers, color: "#94a3b8", grad: "from-slate-400 to-slate-600", swText: "Msingi", enText: "Basic" },
+  standard:   { fee: 1200000, icon: Award,  color: "#5eead4", grad: "from-teal-400 to-teal-600",   swText: "Wastani", enText: "Standard" },
+  premium:    { fee: 2500000, icon: Star,   color: "#16a34a", grad: "from-emerald-500 to-emerald-700", swText: "Bora",  enText: "Premium" },
+  enterprise: { fee: 4800000, icon: Crown,  color: "#064e3b", grad: "from-emerald-800 to-emerald-950", swText: "Biashara", enText: "Enterprise" }
+};
+
+const STATUS_OPTIONS = {
+  trial:    { color: "bg-amber-100 text-amber-800 ring-amber-200",     dot: "bg-amber-500",   swText: "Jaribio",  enText: "Trial" },
+  active:   { color: "bg-emerald-100 text-emerald-800 ring-emerald-200", dot: "bg-emerald-500", swText: "Hai",     enText: "Active" },
+  inactive: { color: "bg-stone-100 text-stone-700 ring-stone-200",      dot: "bg-stone-400",   swText: "Imezimwa", enText: "Inactive" },
+  expired:  { color: "bg-red-100 text-red-800 ring-red-200",           dot: "bg-red-500",     swText: "Imeisha",  enText: "Expired" }
+};
+
+const INPUT_BASE =
+  "w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm text-stone-900 placeholder-stone-400 transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20";
+const INPUT_WITH_ICON =
+  "w-full rounded-lg border border-stone-200 bg-white pl-10 pr-3.5 py-2.5 text-sm text-stone-900 placeholder-stone-400 transition focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20";
+
+function SectionCard({ icon: Icon, title, subtitle, badge, badgeColor, accent, children }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white overflow-hidden">
+      <div
+        className="px-5 py-4 border-b border-stone-100"
+        style={{
+          background: accent || "linear-gradient(to bottom right, #fafaf9, #ffffff)"
+        }}
+      >
+        <div className="flex items-center gap-3">
+          <div
+            className="h-10 w-10 rounded-xl flex items-center justify-center flex-shrink-0"
+            style={{ background: "var(--green-100)", color: "var(--green-800)" }}
+          >
+            <Icon className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="display text-lg" style={{ color: "var(--green-950)" }}>
+                {title}
+              </h3>
+              {badge && (
+                <span
+                  className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold"
+                  style={{
+                    background: badgeColor?.bg || "#fef3c7",
+                    color: badgeColor?.text || "#92400e"
+                  }}
+                >
+                  {badge}
+                </span>
+              )}
+            </div>
+            {subtitle && <p className="text-xs text-stone-500 mt-0.5">{subtitle}</p>}
+          </div>
+        </div>
+      </div>
+      <div className="p-5">{children}</div>
+    </div>
+  );
+}
+
+function FieldLabel({ children, hint }) {
+  return (
+    <div className="mb-1.5">
+      <span className="block text-xs font-medium uppercase tracking-wider text-stone-600">{children}</span>
+      {hint && <span className="block text-[10px] text-stone-400 mt-0.5">{hint}</span>}
+    </div>
+  );
+}
+
+function IconInput({ icon: Icon, ...props }) {
+  return (
+    <div className="relative">
+      <Icon className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 pointer-events-none" />
+      <input {...props} className={INPUT_WITH_ICON} />
+    </div>
+  );
+}
+
 export default function Schools() {
   const { t, lang } = useLang();
   const [rows, setRows] = useState([]);
@@ -45,7 +124,6 @@ export default function Schools() {
   const [schoolForm, setSchoolForm] = useState(EMPTY_SCHOOL);
   const [adminForm, setAdminForm] = useState(EMPTY_ADMIN);
   const [includeAdmin, setIncludeAdmin] = useState(true);
-  const [adminSectionOpen, setAdminSectionOpen] = useState(true);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
@@ -64,12 +142,19 @@ export default function Schools() {
     load();
   }, []);
 
+  // Auto-slug from name
+  useEffect(() => {
+    if (!editing && schoolForm.name) {
+      const slug = schoolForm.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+      setSchoolForm((f) => ({ ...f, slug }));
+    }
+  }, [schoolForm.name, editing]);
+
   const openCreate = () => {
     setEditing(null);
     setSchoolForm(EMPTY_SCHOOL);
     setAdminForm(EMPTY_ADMIN);
     setIncludeAdmin(true);
-    setAdminSectionOpen(true);
     setErr("");
     setSuccess("");
     setModalOpen(true);
@@ -78,10 +163,18 @@ export default function Schools() {
   const openEdit = (row) => {
     setEditing(row);
     setSchoolForm({ ...EMPTY_SCHOOL, ...row });
-    setIncludeAdmin(false); // Don't create admin when editing
+    setIncludeAdmin(false);
     setErr("");
     setSuccess("");
     setModalOpen(true);
+  };
+
+  const selectPlan = (plan) => {
+    setSchoolForm({
+      ...schoolForm,
+      plan,
+      monthly_fee: PLAN_DETAILS[plan]?.fee || schoolForm.monthly_fee
+    });
   };
 
   const save = async (e) => {
@@ -91,7 +184,6 @@ export default function Schools() {
     setSuccess("");
 
     try {
-      // 1) Create or update the school
       const slug =
         schoolForm.slug || schoolForm.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
       const schoolPayload = {
@@ -129,7 +221,6 @@ export default function Schools() {
         school = data;
       }
 
-      // 2) If new school and admin included, create the Pro Admin
       if (!editing && includeAdmin && adminForm.email && adminForm.password) {
         const fullName = [adminForm.first_name, adminForm.middle_name, adminForm.last_name]
           .filter(Boolean)
@@ -163,14 +254,12 @@ export default function Schools() {
 
         setSuccess(
           lang === "sw"
-            ? `✅ Shule "${school.name}" imesajiliwa pamoja na Pro Admin (${fullName}). Email ya uthibitishaji imetumwa.`
-            : `✅ School "${school.name}" registered with Pro Admin (${fullName}). Confirmation email sent.`
+            ? `Shule "${school.name}" imesajiliwa pamoja na Pro Admin ${fullName}. Email ya uthibitishaji imetumwa.`
+            : `School "${school.name}" registered with Pro Admin ${fullName}. Confirmation email sent.`
         );
       } else {
         setSuccess(
-          lang === "sw"
-            ? `✅ Shule "${school.name}" imehifadhiwa.`
-            : `✅ School "${school.name}" saved.`
+          lang === "sw" ? `Shule "${school.name}" imehifadhiwa.` : `School "${school.name}" saved.`
         );
       }
 
@@ -250,10 +339,7 @@ export default function Schools() {
                   <tr key={r.id} className="hover:bg-stone-50/50">
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
-                        <div
-                          className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
-                          style={{ background: "var(--green-700)" }}
-                        >
+                        <div className="flex h-9 w-9 items-center justify-center rounded-lg text-white" style={{ background: "var(--green-700)" }}>
                           <Building2 className="h-4 w-4" />
                         </div>
                         <div>
@@ -264,32 +350,14 @@ export default function Schools() {
                     </td>
                     <td className="px-4 py-3 text-stone-700">{r.director_name || "—"}</td>
                     <td className="px-4 py-3 text-stone-700">{r.phone || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className="capitalize text-stone-700">{t[r.plan] || r.plan}</span>
-                    </td>
-                    <td className="px-4 py-3 text-stone-700">
-                      {(r.student_count || 0).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 font-medium text-stone-900">
-                      {formatTZS(r.monthly_fee)}
-                    </td>
-                    <td className="px-4 py-3">
-                      <StatusPill status={r.status} />
-                    </td>
+                    <td className="px-4 py-3"><span className="capitalize text-stone-700">{t[r.plan] || r.plan}</span></td>
+                    <td className="px-4 py-3 text-stone-700">{(r.student_count || 0).toLocaleString()}</td>
+                    <td className="px-4 py-3 font-medium text-stone-900">{formatTZS(r.monthly_fee)}</td>
+                    <td className="px-4 py-3"><StatusPill status={r.status} /></td>
                     <td className="px-4 py-3 text-right">
                       <div className="inline-flex gap-1">
-                        <button
-                          onClick={() => openEdit(r)}
-                          className="rounded p-1.5 text-stone-500 hover:bg-stone-100 hover:text-emerald-700"
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => remove(r)}
-                          className="rounded p-1.5 text-stone-500 hover:bg-red-50 hover:text-red-600"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        <button onClick={() => openEdit(r)} className="rounded p-1.5 text-stone-500 hover:bg-stone-100 hover:text-emerald-700"><Edit3 className="h-4 w-4" /></button>
+                        <button onClick={() => remove(r)} className="rounded p-1.5 text-stone-500 hover:bg-red-50 hover:text-red-600"><Trash2 className="h-4 w-4" /></button>
                       </div>
                     </td>
                   </tr>
@@ -300,272 +368,329 @@ export default function Schools() {
         </div>
       </div>
 
-      <Modal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        title={editing ? t.edit : t.registerSchool}
-        size="xl"
-      >
-        <form onSubmit={save} className="space-y-5">
-          {/* SCHOOL DETAILS SECTION */}
-          <div>
-            <div className="flex items-center gap-2 mb-3">
-              <div
-                className="h-8 w-8 rounded-lg flex items-center justify-center"
-                style={{ background: "var(--green-100)", color: "var(--green-800)" }}
-              >
-                <Building2 className="h-4 w-4" />
-              </div>
-              <h3 className="display text-xl" style={{ color: "var(--green-950)" }}>
-                {lang === "sw" ? "Maelezo ya Shule" : "School Details"}
-              </h3>
-            </div>
+      {/* ====== MODERN REGISTRATION MODAL ====== */}
+      <Modal open={modalOpen} onClose={() => setModalOpen(false)} title={editing ? t.edit : t.registerSchool} size="xl">
+        <form onSubmit={save} className="space-y-4">
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Field label={t.schoolName}>
-                <input
+          {/* Intro banner */}
+          {!editing && (
+            <div className="rounded-xl p-4 flex items-start gap-3" style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
+              <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "var(--green-700)" }} />
+              <div className="text-xs">
+                <p className="font-medium" style={{ color: "var(--green-950)" }}>
+                  {lang === "sw" ? "Sajili shule + Pro Admin kwa hatua moja" : "Register school + Pro Admin in one step"}
+                </p>
+                <p className="text-stone-600 mt-0.5">
+                  {lang === "sw"
+                    ? "Jaza maelezo ya shule kisha unaweza pia kutengeneza akaunti ya Pro Admin (Mwalimu Mkuu)."
+                    : "Fill school details then optionally create the Pro Admin (Head Teacher) account."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── Section 1: Basic Info ── */}
+          <SectionCard
+            icon={Building2}
+            title={lang === "sw" ? "Maelezo ya Msingi" : "Basic Information"}
+            subtitle={lang === "sw" ? "Jina la shule na mkurugenzi" : "School name and director"}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel hint={schoolForm.slug ? `slug: ${schoolForm.slug}` : null}>
+                  {t.schoolName} *
+                </FieldLabel>
+                <IconInput
+                  icon={Building2}
                   required
-                  className={inputClass}
                   value={schoolForm.name}
                   onChange={(e) => setSchoolForm({ ...schoolForm, name: e.target.value })}
+                  placeholder={lang === "sw" ? "Mwenge Secondary School" : "Mwenge Secondary School"}
                 />
-              </Field>
-              <Field label={t.directorName}>
-                <input
-                  className={inputClass}
+              </div>
+              <div>
+                <FieldLabel>{t.directorName}</FieldLabel>
+                <IconInput
+                  icon={User}
                   value={schoolForm.director_name}
                   onChange={(e) => setSchoolForm({ ...schoolForm, director_name: e.target.value })}
+                  placeholder={lang === "sw" ? "Dr. Joseph Mwakasege" : "Dr. Joseph Mwakasege"}
                 />
-              </Field>
-              <Field label={t.email}>
-                <input
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ── Section 2: Contact ── */}
+          <SectionCard
+            icon={Phone}
+            title={lang === "sw" ? "Mawasiliano" : "Contact Information"}
+            subtitle={lang === "sw" ? "Barua pepe, simu, anwani" : "Email, phone, address"}
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div>
+                <FieldLabel>{t.email}</FieldLabel>
+                <IconInput
+                  icon={Mail}
                   type="email"
-                  className={inputClass}
                   value={schoolForm.email}
                   onChange={(e) => setSchoolForm({ ...schoolForm, email: e.target.value })}
+                  placeholder="info@school.ac.tz"
                 />
-              </Field>
-              <Field label={t.phone}>
-                <input
-                  className={inputClass}
+              </div>
+              <div>
+                <FieldLabel>{t.phone}</FieldLabel>
+                <IconInput
+                  icon={Phone}
                   value={schoolForm.phone}
                   onChange={(e) => setSchoolForm({ ...schoolForm, phone: e.target.value })}
+                  placeholder="+255 7XX XXX XXX"
                 />
-              </Field>
-              <Field label={t.address}>
-                <input
-                  className={inputClass}
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel>{t.address}</FieldLabel>
+                <IconInput
+                  icon={MapPin}
                   value={schoolForm.address}
                   onChange={(e) => setSchoolForm({ ...schoolForm, address: e.target.value })}
+                  placeholder={lang === "sw" ? "Mwenge Road, Kinondoni" : "Mwenge Road, Kinondoni"}
                 />
-              </Field>
-              <Field label="Region">
-                <input
-                  className={inputClass}
+              </div>
+              <div className="md:col-span-2">
+                <FieldLabel>{lang === "sw" ? "Mkoa" : "Region"}</FieldLabel>
+                <IconInput
+                  icon={MapPin}
                   value={schoolForm.region}
                   onChange={(e) => setSchoolForm({ ...schoolForm, region: e.target.value })}
+                  placeholder={lang === "sw" ? "Dar es Salaam" : "Dar es Salaam"}
                 />
-              </Field>
-              <Field label={t.subscriptionPlan}>
-                <select
-                  className={inputClass}
-                  value={schoolForm.plan}
-                  onChange={(e) => setSchoolForm({ ...schoolForm, plan: e.target.value })}
-                >
-                  <option value="basic">{t.basic}</option>
-                  <option value="standard">{t.standard}</option>
-                  <option value="premium">{t.premium}</option>
-                  <option value="enterprise">{t.enterprise}</option>
-                </select>
-              </Field>
-              <Field label={t.status}>
-                <select
-                  className={inputClass}
-                  value={schoolForm.status}
-                  onChange={(e) => setSchoolForm({ ...schoolForm, status: e.target.value })}
-                >
-                  <option value="trial">{t.trial}</option>
-                  <option value="active">{t.active}</option>
-                  <option value="inactive">{t.inactive}</option>
-                  <option value="expired">{t.expired}</option>
-                </select>
-              </Field>
-              <Field label={`${t.monthlyRevenue} (TZS)`}>
+              </div>
+            </div>
+          </SectionCard>
+
+          {/* ── Section 3: Plan (visual cards) ── */}
+          <SectionCard
+            icon={CreditCard}
+            title={lang === "sw" ? "Mpango wa Usajili" : "Subscription Plan"}
+            subtitle={lang === "sw" ? "Chagua mpango unaofaa shule" : "Choose the plan that fits the school"}
+          >
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-4">
+              {Object.entries(PLAN_DETAILS).map(([key, plan]) => {
+                const PlanIcon = plan.icon;
+                const selected = schoolForm.plan === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => selectPlan(key)}
+                    className={`relative rounded-xl border-2 p-3 text-left transition ${
+                      selected
+                        ? "border-emerald-700 shadow-sm"
+                        : "border-stone-200 hover:border-stone-300"
+                    }`}
+                    style={selected ? { background: "linear-gradient(135deg, #ecfdf5, #ffffff)" } : {}}
+                  >
+                    {selected && (
+                      <CheckCircle2 className="absolute top-1.5 right-1.5 h-4 w-4" style={{ color: "var(--green-700)" }} />
+                    )}
+                    <div
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center mb-2 bg-gradient-to-br ${plan.grad}`}
+                    >
+                      <PlanIcon className="h-3.5 w-3.5 text-white" />
+                    </div>
+                    <p className="text-[10px] uppercase tracking-wider text-stone-500">
+                      {lang === "sw" ? plan.swText : plan.enText}
+                    </p>
+                    <p className="font-medium text-sm mt-0.5" style={{ color: "var(--green-950)" }}>
+                      {(plan.fee / 1000).toLocaleString()}K
+                    </p>
+                    <p className="text-[10px] text-stone-500 mt-0.5">TZS / mo</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <FieldLabel>{lang === "sw" ? "Hali ya Usajili" : "Subscription Status"}</FieldLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.entries(STATUS_OPTIONS).map(([key, st]) => {
+                    const selected = schoolForm.status === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSchoolForm({ ...schoolForm, status: key })}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${
+                          selected
+                            ? "border-emerald-700 bg-emerald-50 text-emerald-900"
+                            : "border-stone-200 text-stone-600 hover:border-stone-300"
+                        }`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full ${st.dot}`} />
+                        {lang === "sw" ? st.swText : st.enText}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div>
+                <FieldLabel hint={lang === "sw" ? "Ada ya kila mwezi" : "Per month"}>
+                  {lang === "sw" ? "Ada ya Mwezi (TZS)" : "Monthly Fee (TZS)"}
+                </FieldLabel>
                 <input
                   type="number"
-                  className={inputClass}
+                  className={INPUT_BASE}
                   value={schoolForm.monthly_fee}
                   onChange={(e) => setSchoolForm({ ...schoolForm, monthly_fee: e.target.value })}
                 />
-              </Field>
-              <Field label={t.activeStudents}>
-                <input
-                  type="number"
-                  className={inputClass}
-                  value={schoolForm.student_count}
-                  onChange={(e) => setSchoolForm({ ...schoolForm, student_count: e.target.value })}
-                />
-              </Field>
-            </div>
-          </div>
-
-          {/* PRO ADMIN SECTION (only when creating new) */}
-          {!editing && (
-            <div className="border-t border-stone-200 pt-5">
-              <button
-                type="button"
-                onClick={() => setAdminSectionOpen(!adminSectionOpen)}
-                className="w-full flex items-center justify-between mb-3 group"
-              >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-8 w-8 rounded-lg flex items-center justify-center"
-                    style={{ background: "linear-gradient(135deg, #fbbf24, #f59e0b)" }}
-                  >
-                    <Crown className="h-4 w-4 text-white" />
-                  </div>
-                  <h3 className="display text-xl" style={{ color: "var(--green-950)" }}>
-                    {lang === "sw" ? "Pro Admin wa Shule" : "School Pro Admin"}
-                  </h3>
-                  <span
-                    className="ml-1 text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold"
-                    style={{ background: "#fef3c7", color: "#92400e" }}
-                  >
-                    PRO
-                  </span>
+              </div>
+              <div>
+                <FieldLabel hint={lang === "sw" ? "Idadi ya wanafunzi sasa" : "Current student count"}>
+                  {lang === "sw" ? "Wanafunzi" : "Students"}
+                </FieldLabel>
+                <div className="relative">
+                  <Users className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 pointer-events-none" />
+                  <input
+                    type="number"
+                    className={INPUT_WITH_ICON}
+                    value={schoolForm.student_count}
+                    onChange={(e) => setSchoolForm({ ...schoolForm, student_count: e.target.value })}
+                  />
                 </div>
-                {adminSectionOpen ? (
-                  <ChevronDown className="h-4 w-4 text-stone-400" />
-                ) : (
-                  <ChevronRight className="h-4 w-4 text-stone-400" />
-                )}
-              </button>
+              </div>
+            </div>
+          </SectionCard>
 
-              {adminSectionOpen && (
-                <>
-                  <div className="rounded-xl p-4 mb-4 flex items-start gap-3"
-                    style={{ background: "linear-gradient(135deg, #ecfdf5, #d1fae5)" }}>
-                    <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "var(--green-700)" }} />
-                    <div className="text-xs">
-                      <p className="font-medium mb-1" style={{ color: "var(--green-950)" }}>
-                        {lang === "sw" ? "Pro Admin (Mwalimu Mkuu)" : "Pro Admin (Head Teacher)"}
-                      </p>
-                      <p className="text-stone-600 leading-relaxed">
-                        {lang === "sw"
-                          ? "Ana ruhusa kamili ya kusimamia shule yake — kusajili walimu, wanafunzi, kuweka mahudhurio, mitihani, ada, na vyote. Atapata email ya uthibitishaji baada ya kusajiliwa."
-                          : "Has full permissions to manage their school — register teachers, students, mark attendance, exams, fees, and everything. Will receive a confirmation email after registration."}
-                      </p>
+          {/* ── Section 4: Pro Admin (only on create) ── */}
+          {!editing && (
+            <SectionCard
+              icon={Crown}
+              title={lang === "sw" ? "Pro Admin wa Shule" : "School Pro Admin"}
+              subtitle={lang === "sw" ? "Mwalimu Mkuu — msimamizi mkuu wa shule" : "Head Teacher — main school administrator"}
+              badge="PRO"
+              badgeColor={{ bg: "#fef3c7", text: "#92400e" }}
+              accent="linear-gradient(135deg, #fffbeb 0%, #fef3c7 50%, #ffffff 100%)"
+            >
+              <label className="flex items-start gap-3 mb-4 p-3 rounded-lg bg-stone-50 cursor-pointer hover:bg-stone-100 transition">
+                <input
+                  type="checkbox"
+                  checked={includeAdmin}
+                  onChange={(e) => setIncludeAdmin(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-stone-300 text-emerald-700 focus:ring-emerald-600"
+                />
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--green-950)" }}>
+                    {lang === "sw" ? "Tengeneza akaunti ya Pro Admin sasa" : "Create Pro Admin account now"}
+                  </p>
+                  <p className="text-xs text-stone-500 mt-0.5">
+                    {lang === "sw"
+                      ? "Atapata permissions kamili kusimamia shule yake — wanafunzi, walimu, ada, mitihani, n.k."
+                      : "Will have full permissions to manage the school — students, staff, fees, exams, etc."}
+                  </p>
+                </div>
+              </label>
+
+              {includeAdmin && (
+                <div className="space-y-3 animate-in">
+                  <div>
+                    <FieldLabel hint={lang === "sw" ? "Majina yote matatu" : "All three names"}>
+                      {lang === "sw" ? "Jina kamili" : "Full Name"} *
+                    </FieldLabel>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <input
+                        required={includeAdmin}
+                        className={INPUT_BASE}
+                        placeholder={lang === "sw" ? "Jina la kwanza" : "First name"}
+                        value={adminForm.first_name}
+                        onChange={(e) => setAdminForm({ ...adminForm, first_name: e.target.value })}
+                      />
+                      <input
+                        className={INPUT_BASE}
+                        placeholder={lang === "sw" ? "Jina la kati" : "Middle name"}
+                        value={adminForm.middle_name}
+                        onChange={(e) => setAdminForm({ ...adminForm, middle_name: e.target.value })}
+                      />
+                      <input
+                        required={includeAdmin}
+                        className={INPUT_BASE}
+                        placeholder={lang === "sw" ? "Jina la mwisho" : "Last name"}
+                        value={adminForm.last_name}
+                        onChange={(e) => setAdminForm({ ...adminForm, last_name: e.target.value })}
+                      />
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 mb-4 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={includeAdmin}
-                      onChange={(e) => setIncludeAdmin(e.target.checked)}
-                      className="h-4 w-4 rounded border-stone-300 text-emerald-700 focus:ring-emerald-600"
-                    />
-                    <span className="text-sm text-stone-700">
-                      {lang === "sw"
-                        ? "Tengeneza akaunti ya Pro Admin sasa hivi"
-                        : "Create Pro Admin account now"}
-                    </span>
-                  </label>
-
-                  {includeAdmin && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <Field label={lang === "sw" ? "Jina la kwanza" : "First name"}>
-                          <input
-                            required={includeAdmin}
-                            className={inputClass}
-                            value={adminForm.first_name}
-                            onChange={(e) => setAdminForm({ ...adminForm, first_name: e.target.value })}
-                          />
-                        </Field>
-                        <Field label={lang === "sw" ? "Jina la kati" : "Middle name"}>
-                          <input
-                            className={inputClass}
-                            value={adminForm.middle_name}
-                            onChange={(e) => setAdminForm({ ...adminForm, middle_name: e.target.value })}
-                          />
-                        </Field>
-                        <Field label={lang === "sw" ? "Jina la mwisho" : "Last name"}>
-                          <input
-                            required={includeAdmin}
-                            className={inputClass}
-                            value={adminForm.last_name}
-                            onChange={(e) => setAdminForm({ ...adminForm, last_name: e.target.value })}
-                          />
-                        </Field>
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <Field label={lang === "sw" ? "Barua pepe ya Pro Admin" : "Pro Admin Email"}>
-                          <input
-                            required={includeAdmin}
-                            type="email"
-                            className={inputClass}
-                            value={adminForm.email}
-                            onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
-                            placeholder="admin@school.ac.tz"
-                          />
-                        </Field>
-                        <Field label={lang === "sw" ? "Namba ya simu" : "Phone number"}>
-                          <input
-                            required={includeAdmin}
-                            className={inputClass}
-                            value={adminForm.phone}
-                            onChange={(e) => setAdminForm({ ...adminForm, phone: e.target.value })}
-                            placeholder="+255 7XX XXX XXX"
-                          />
-                        </Field>
-                      </div>
-                      <Field
-                        label={lang === "sw" ? "Nenosiri" : "Password"}
-                        hint={
-                          lang === "sw"
-                            ? "Angalau herufi 6. Pro Admin anaweza kubadilisha baadaye."
-                            : "At least 6 characters. Pro Admin can change later."
-                        }
-                      >
-                        <input
-                          required={includeAdmin}
-                          minLength={6}
-                          type="password"
-                          className={inputClass}
-                          value={adminForm.password}
-                          onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
-                        />
-                      </Field>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <FieldLabel hint={lang === "sw" ? "Atatumia kuingia" : "Used to sign in"}>
+                        {lang === "sw" ? "Barua pepe" : "Email"} *
+                      </FieldLabel>
+                      <IconInput
+                        icon={Mail}
+                        required={includeAdmin}
+                        type="email"
+                        value={adminForm.email}
+                        onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+                        placeholder="admin@school.ac.tz"
+                      />
                     </div>
-                  )}
-                </>
+                    <div>
+                      <FieldLabel>{lang === "sw" ? "Namba ya simu" : "Phone number"} *</FieldLabel>
+                      <IconInput
+                        icon={Phone}
+                        required={includeAdmin}
+                        value={adminForm.phone}
+                        onChange={(e) => setAdminForm({ ...adminForm, phone: e.target.value })}
+                        placeholder="+255 7XX XXX XXX"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <FieldLabel hint={lang === "sw" ? "Angalau herufi 6 — Pro Admin anaweza kubadilisha baadaye" : "At least 6 chars — can be changed later"}>
+                      {lang === "sw" ? "Nenosiri" : "Password"} *
+                    </FieldLabel>
+                    <IconInput
+                      icon={Lock}
+                      required={includeAdmin}
+                      minLength={6}
+                      type="password"
+                      value={adminForm.password}
+                      onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+                    />
+                  </div>
+                </div>
               )}
-            </div>
+            </SectionCard>
           )}
 
+          {/* Feedback */}
           {err && (
-            <div className="rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">{err}</div>
+            <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 flex items-start gap-2 border border-red-100">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{err}</span>
+            </div>
           )}
           {success && (
-            <div className="rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700 flex items-start gap-2">
+            <div className="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700 flex items-start gap-2 border border-emerald-100">
               <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
               <span>{success}</span>
             </div>
           )}
 
+          {/* Submit */}
           <div className="flex justify-end gap-2 pt-3 border-t border-stone-100">
             <button
               type="button"
               onClick={() => setModalOpen(false)}
-              className="rounded-lg border border-stone-200 px-4 py-2 text-sm text-stone-700 hover:bg-stone-50"
+              className="rounded-lg border border-stone-200 px-5 py-2.5 text-sm text-stone-700 hover:bg-stone-50"
             >
               {t.cancel}
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="flex items-center gap-2 rounded-lg px-5 py-2 text-sm font-medium text-white disabled:opacity-60"
+              className="flex items-center gap-2 rounded-lg px-6 py-2.5 text-sm font-medium text-white shadow-sm hover:shadow disabled:opacity-60 transition"
               style={{ background: "var(--green-950)" }}
             >
               {saving ? (
