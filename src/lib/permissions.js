@@ -61,6 +61,8 @@ export const MENU_ACCESS = {
  */
 export function canAccess(role, menuKey) {
   if (!role) return false;
+  // Super admin bypasses ALL permission checks — they own the platform
+  if (role === "super_admin") return true;
   const allowed = MENU_ACCESS[menuKey];
   if (!allowed) return false;
   return allowed.includes("*") || allowed.includes(role);

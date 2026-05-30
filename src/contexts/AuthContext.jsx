@@ -98,9 +98,22 @@ export function AuthProvider({ children }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.error("signOut error:", e);
+    }
     setUser(null);
     setProfile(null);
+    // Clear any cached storage and force reload to login page
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (e) {
+      // ignore
+    }
+    // Force full reload to clear all React state and re-init from scratch
+    window.location.href = "/";
   };
 
   const isSuperAdmin = profile?.role === "super_admin";
