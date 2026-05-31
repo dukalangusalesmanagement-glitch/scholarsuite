@@ -118,32 +118,44 @@ export default function Schools() {
   const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Load schools list using direct fetch
   const load = async () => {
     setLoading(true);
-    const { data } = await supabase.from("schools").select("*").order("created_at", { ascending: false });
-    setRows(data || []);
-    setLoading(false);
+    try {
+      const data = await directFetch("/rest/v1/schools?select=*&order=created_at.desc");
+      setRows(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Load schools failed:", e);
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
-  // Direct fetch helper - bypasses Supabase JS client which has been hanging
+  // Direct fetch helper - completely bypasses Supabase JS client
   const directFetch = async (path, options = {}) => {
     const url = `${import.meta.env.VITE_SUPABASE_URL}${path}`;
     const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+    // Read auth token directly from localStorage (no supabase.auth call)
     let token = key;
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.access_token) token = session.access_token;
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith("sb-") && k.endsWith("-auth-token")) {
+          const v = JSON.parse(localStorage.getItem(k));
+          if (v?.access_token) { token = v.access_token; break; }
+        }
+      }
     } catch (e) {
-      console.warn("Could not get session, using anon key");
+      // ignore, use anon key
     }
 
-    console.log(`🚀 Direct fetch ${options.method || "GET"}:`, url);
+    console.log(`🚀 ${options.method || "GET"} ${url}`);
     const startTime = Date.now();
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 12000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
       const response = await fetch(url, {
@@ -159,23 +171,21 @@ export default function Schools() {
       });
       clearTimeout(timeoutId);
       const duration = Date.now() - startTime;
-      console.log(`✅ Response in ${duration}ms, status: ${response.status}`);
+      console.log(`✅ ${response.status} in ${duration}ms`);
 
       const text = await response.text();
       let data;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
 
       if (!response.ok) {
-        const errMsg = typeof data === "object" ? (data.message || JSON.stringify(data)) : data;
-        throw new Error(`HTTP ${response.status}: ${errMsg}`);
+        const msg = typeof data === "object" ? (data.message || JSON.stringify(data)) : data;
+        throw new Error(`HTTP ${response.status}: ${msg}`);
       }
       return data;
     } catch (e) {
       clearTimeout(timeoutId);
       const duration = Date.now() - startTime;
-      if (e.name === "AbortError") {
-        throw new Error(`Request timed out after ${duration}ms`);
-      }
+      if (e.name === "AbortError") throw new Error(`Request aborted after ${duration}ms (10s timeout)`);
       throw e;
     }
   };
@@ -293,8 +303,13 @@ export default function Schools() {
 
   const remove = async (row) => {
     if (!confirm(t.deleteConfirm)) return;
-    await supabase.from("schools").delete().eq("id", row.id);
-    load();
+    try {
+      await directFetch(`/rest/v1/schools?id=eq.${row.id}`, { method: "DELETE" });
+      load();
+    } catch (e) {
+      console.error("Delete failed:", e);
+      alert(e.message);
+    }
   };
 
   const filtered = rows.filter((r) =>
