@@ -278,20 +278,78 @@ export default function Schools() {
     setErr(""); setSaving(true);
     try {
       const fullName = [adminForm.first_name, adminForm.middle_name, adminForm.last_name].filter(Boolean).join(" ");
-      const { error } = await withTimeout(
-        supabase.auth.signUp({
-          email: adminForm.email, password: adminForm.password,
-          options: {
+
+      // Direct fetch to Supabase Auth API — bypasses JS client
+      const authUrl = `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/signup`;
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+      let response, data;
+      try {
+        response = await fetch(authUrl, {
+          method: "POST",
+          signal: controller.signal,
+          headers: {
+            "apikey": anonKey,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            email: adminForm.email,
+            password: adminForm.password,
             data: {
-              first_name: adminForm.first_name, middle_name: adminForm.middle_name, last_name: adminForm.last_name,
-              full_name: fullName, phone: adminForm.phone, role: "head_teacher", school_id: createdSchool.id
+              first_name: adminForm.first_name,
+              middle_name: adminForm.middle_name,
+              last_name: adminForm.last_name,
+              full_name: fullName,
+              phone: adminForm.phone,
+              role: "head_teacher",
+              school_id: createdSchool.id
             }
-          }
-        }),
-        15000,
-        "Create Pro Admin"
-      );
-      if (error) { setErr((lang === "sw" ? "Pro Admin imeshindwa: " : "Pro Admin failed: ") + error.message); setSaving(false); return; }
+          })
+        });
+        clearTimeout(timeoutId);
+        data = await response.json();
+      } catch (fetchErr) {
+        clearTimeout(timeoutId);
+        if (fetchErr.name === "AbortError") {
+          setErr(lang === "sw" ? "Request imezidi muda (10s) - jaribu tena" : "Request timed out (10s) - try again");
+        } else {
+          setErr(fetchErr.message);
+        }
+        setSaving(false);
+        return;
+      }
+
+      if (!response.ok) {
+        let errMsg = data.error_description || data.msg || data.message || `HTTP ${response.status}`;
+
+        // Translate common errors to Swahili
+        const lower = errMsg.toLowerCase();
+        if (lower.includes("user already") || lower.includes("already registered") || lower.includes("already been")) {
+          errMsg = lang === "sw"
+            ? `Email "${adminForm.email}" imesajiliwa tayari. Tumia email nyingine au futa user wa zamani kwenye Supabase.`
+            : `Email "${adminForm.email}" already registered. Use a different email or delete the old user in Supabase.`;
+        } else if (lower.includes("password") && lower.includes("6")) {
+          errMsg = lang === "sw"
+            ? "Nenosiri lazima iwe na herufi 6 au zaidi"
+            : "Password must be at least 6 characters";
+        } else if (lower.includes("rate limit")) {
+          errMsg = lang === "sw"
+            ? "Umejaribu mara nyingi sana. Subiri dakika 1-2 kisha jaribu tena."
+            : "Too many attempts. Wait 1-2 minutes and try again.";
+        } else if (lower.includes("invalid") && lower.includes("email")) {
+          errMsg = lang === "sw"
+            ? "Email haijasahihika"
+            : "Invalid email format";
+        }
+
+        setErr(errMsg);
+        setSaving(false);
+        return;
+      }
+
       setSuccess(lang === "sw" ? `Shule + Pro Admin (${fullName}) imekamilika!` : `School + Pro Admin (${fullName}) done!`);
       setTimeout(() => { setModalOpen(false); load(); }, 1800);
     } catch (e) {
