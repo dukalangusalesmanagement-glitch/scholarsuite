@@ -126,6 +126,16 @@ export default function Schools() {
   };
   useEffect(() => { load(); }, []);
 
+  // Helper: race a promise against a timeout
+  const withTimeout = (promise, ms = 15000, label = "Request") => {
+    return Promise.race([
+      promise,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s — check connection`)), ms)
+      )
+    ]);
+  };
+
   useEffect(() => {
     if (!editing && schoolForm.name) {
       const slug = schoolForm.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -162,19 +172,30 @@ export default function Schools() {
       const payload = { ...schoolForm, slug, monthly_fee: Number(schoolForm.monthly_fee) || 0, student_count: Number(schoolForm.student_count) || 0 };
 
       if (editing) {
-        const { data, error } = await supabase.from("schools").update(payload).eq("id", editing.id).select().single();
+        const { data, error } = await withTimeout(
+          supabase.from("schools").update(payload).eq("id", editing.id).select().single(),
+          15000,
+          "Update school"
+        );
         if (error) { setErr(error.message); setSaving(false); return; }
         setCreatedSchool(data);
         setSuccess(lang === "sw" ? "Shule imehifadhiwa." : "School saved.");
         setTimeout(() => { setModalOpen(false); load(); }, 1500);
       } else {
-        const { data, error } = await supabase.from("schools").insert(payload).select().single();
+        const { data, error } = await withTimeout(
+          supabase.from("schools").insert(payload).select().single(),
+          15000,
+          "Create school"
+        );
         if (error) { setErr(error.message); setSaving(false); return; }
         setCreatedSchool(data);
         setStep(2);
         load();
       }
-    } catch (e) { setErr(e.message); }
+    } catch (e) {
+      console.error("goToStep2 error:", e);
+      setErr(e.message);
+    }
     finally { setSaving(false); }
   };
 
@@ -191,19 +212,26 @@ export default function Schools() {
     setErr(""); setSaving(true);
     try {
       const fullName = [adminForm.first_name, adminForm.middle_name, adminForm.last_name].filter(Boolean).join(" ");
-      const { error } = await supabase.auth.signUp({
-        email: adminForm.email, password: adminForm.password,
-        options: {
-          data: {
-            first_name: adminForm.first_name, middle_name: adminForm.middle_name, last_name: adminForm.last_name,
-            full_name: fullName, phone: adminForm.phone, role: "head_teacher", school_id: createdSchool.id
+      const { error } = await withTimeout(
+        supabase.auth.signUp({
+          email: adminForm.email, password: adminForm.password,
+          options: {
+            data: {
+              first_name: adminForm.first_name, middle_name: adminForm.middle_name, last_name: adminForm.last_name,
+              full_name: fullName, phone: adminForm.phone, role: "head_teacher", school_id: createdSchool.id
+            }
           }
-        }
-      });
+        }),
+        15000,
+        "Create Pro Admin"
+      );
       if (error) { setErr((lang === "sw" ? "Pro Admin imeshindwa: " : "Pro Admin failed: ") + error.message); setSaving(false); return; }
       setSuccess(lang === "sw" ? `Shule + Pro Admin (${fullName}) imekamilika!` : `School + Pro Admin (${fullName}) done!`);
       setTimeout(() => { setModalOpen(false); load(); }, 1800);
-    } catch (e) { setErr(e.message); }
+    } catch (e) {
+      console.error("saveProAdmin error:", e);
+      setErr(e.message);
+    }
     finally { setSaving(false); }
   };
 
