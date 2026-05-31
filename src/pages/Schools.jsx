@@ -126,6 +126,60 @@ export default function Schools() {
   };
   useEffect(() => { load(); }, []);
 
+  // Direct fetch helper - bypasses Supabase JS client which has been hanging
+  const directFetch = async (path, options = {}) => {
+    const url = `${import.meta.env.VITE_SUPABASE_URL}${path}`;
+    const key = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+    let token = key;
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.access_token) token = session.access_token;
+    } catch (e) {
+      console.warn("Could not get session, using anon key");
+    }
+
+    console.log(`🚀 Direct fetch ${options.method || "GET"}:`, url);
+    const startTime = Date.now();
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          "apikey": key,
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...(options.headers || {})
+        }
+      });
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+      console.log(`✅ Response in ${duration}ms, status: ${response.status}`);
+
+      const text = await response.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+      if (!response.ok) {
+        const errMsg = typeof data === "object" ? (data.message || JSON.stringify(data)) : data;
+        throw new Error(`HTTP ${response.status}: ${errMsg}`);
+      }
+      return data;
+    } catch (e) {
+      clearTimeout(timeoutId);
+      const duration = Date.now() - startTime;
+      if (e.name === "AbortError") {
+        throw new Error(`Request timed out after ${duration}ms`);
+      }
+      throw e;
+    }
+  };
+
   // Helper: race a promise against a timeout
   const withTimeout = (promise, ms = 15000, label = "Request") => {
     return Promise.race([
@@ -172,23 +226,25 @@ export default function Schools() {
       const payload = { ...schoolForm, slug, monthly_fee: Number(schoolForm.monthly_fee) || 0, student_count: Number(schoolForm.student_count) || 0 };
 
       if (editing) {
-        const { data, error } = await withTimeout(
-          supabase.from("schools").update(payload).eq("id", editing.id).select().single(),
-          15000,
-          "Update school"
-        );
-        if (error) { setErr(error.message); setSaving(false); return; }
-        setCreatedSchool(data);
+        // UPDATE existing school using direct fetch
+        const data = await directFetch(`/rest/v1/schools?id=eq.${editing.id}`, {
+          method: "PATCH",
+          headers: { "Prefer": "return=representation" },
+          body: JSON.stringify(payload)
+        });
+        const school = Array.isArray(data) ? data[0] : data;
+        setCreatedSchool(school);
         setSuccess(lang === "sw" ? "Shule imehifadhiwa." : "School saved.");
         setTimeout(() => { setModalOpen(false); load(); }, 1500);
       } else {
-        const { data, error } = await withTimeout(
-          supabase.from("schools").insert(payload).select().single(),
-          15000,
-          "Create school"
-        );
-        if (error) { setErr(error.message); setSaving(false); return; }
-        setCreatedSchool(data);
+        // CREATE new school using direct fetch (bypasses Supabase JS client)
+        const data = await directFetch("/rest/v1/schools", {
+          method: "POST",
+          headers: { "Prefer": "return=representation" },
+          body: JSON.stringify(payload)
+        });
+        const school = Array.isArray(data) ? data[0] : data;
+        setCreatedSchool(school);
         setStep(2);
         load();
       }
@@ -245,6 +301,26 @@ export default function Schools() {
     [r.name, r.director_name, r.email, r.region].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase())
   );
 
+  // Connection diagnostic
+  const [testResult, setTestResult] = useState(null);
+  const [testing, setTesting] = useState(false);
+
+  const testConnection = async () => {
+    setTesting(true);
+    setTestResult(null);
+    const start = Date.now();
+    try {
+      const data = await directFetch("/rest/v1/schools?select=id&limit=1", { method: "GET" });
+      const duration = Date.now() - start;
+      setTestResult({ ok: true, msg: `Connection OK (${duration}ms). Found ${Array.isArray(data) ? data.length : 0} test row.` });
+    } catch (e) {
+      const duration = Date.now() - start;
+      setTestResult({ ok: false, msg: `Failed after ${duration}ms: ${e.message}` });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   // ── Footer buttons (sticky) ───────────────────────
   const renderFooter = () => {
     if (step === 1) {
@@ -273,11 +349,30 @@ export default function Schools() {
     <div>
       <PageHeader title={t.schools} subtitle={`${rows.length} ${t.schools.toLowerCase()}`}
         actions={
-          <button onClick={openCreate} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90" style={{ background: "var(--green-950)" }}>
-            <Plus className="h-4 w-4" /> {t.registerSchool}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={testConnection}
+              disabled={testing}
+              className="flex items-center gap-2 rounded-lg border border-stone-200 px-3 py-2 text-xs font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60"
+            >
+              {testing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Phone className="h-3.5 w-3.5" />}
+              Test Connection
+            </button>
+            <button onClick={openCreate} className="flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-white hover:opacity-90" style={{ background: "var(--green-950)" }}>
+              <Plus className="h-4 w-4" /> {t.registerSchool}
+            </button>
+          </div>
         }
       />
+
+      {testResult && (
+        <div className={`mb-3 rounded-lg p-3 text-sm border ${testResult.ok ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-red-50 border-red-200 text-red-800"}`}>
+          <div className="flex items-start gap-2">
+            {testResult.ok ? <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" /> : <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />}
+            <span>{testResult.msg}</span>
+          </div>
+        </div>
+      )}
 
       <Toolbar onSearch={setSearch} />
 
