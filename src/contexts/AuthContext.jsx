@@ -11,7 +11,7 @@ export function AuthProvider({ children }) {
   const loadProfile = async (userId, userEmail, userMetadata) => {
     if (!userId) return null;
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("profiles")
         .select("*")
         .eq("id", userId)
@@ -19,43 +19,33 @@ export function AuthProvider({ children }) {
 
       if (data) return data;
 
-      // Profile doesn't exist — auto-create with defaults
-      if (!error || error.code === "PGRST116") {
-        console.log("Creating missing profile for:", userEmail);
-        const meta = userMetadata || {};
-        const fullName =
-          meta.full_name ||
-          [meta.first_name, meta.middle_name, meta.last_name].filter(Boolean).join(" ") ||
-          userEmail?.split("@")[0] ||
-          "User";
+      // Profile doesn't exist — auto-create
+      console.log("Auto-creating profile for:", userEmail);
+      const meta = userMetadata || {};
+      const fullName =
+        meta.full_name ||
+        [meta.first_name, meta.middle_name, meta.last_name].filter(Boolean).join(" ") ||
+        userEmail?.split("@")[0] ||
+        "User";
 
-        const { data: created, error: createError } = await supabase
-          .from("profiles")
-          .insert({
-            id: userId,
-            email: userEmail,
-            full_name: fullName,
-            first_name: meta.first_name || null,
-            middle_name: meta.middle_name || null,
-            last_name: meta.last_name || null,
-            phone: meta.phone || null,
-            role: meta.role || "school_admin",
-            school_id: meta.school_id || null
-          })
-          .select()
-          .single();
+      const { data: created, error: createError } = await supabase
+        .from("profiles")
+        .insert({
+          id: userId,
+          email: userEmail,
+          full_name: fullName,
+          role: meta.role || "school_admin"
+        })
+        .select()
+        .single();
 
-        if (createError) {
-          console.error("Auto-create profile failed:", createError.message);
-          return null;
-        }
-        return created;
+      if (createError) {
+        console.warn("Profile auto-create failed:", createError.message);
+        return null;
       }
-
-      console.warn("Profile load error:", error.message);
-      return null;
+      return created;
     } catch (err) {
-      console.error("Profile load threw:", err);
+      console.warn("loadProfile error:", err.message || err);
       return null;
     }
   };
@@ -63,22 +53,27 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let mounted = true;
 
-    // Safety net: never stay in loading state longer than 8 seconds
-    const safetyTimeout = setTimeout(() => {
-      if (mounted) {
-        console.warn("Auth init timed out — showing login");
-        setLoading(false);
-      }
-    }, 8000);
+    const initAuth = async () => {
+      try {
+        // Race getSession against a 4-second timeout
+        const sessionResult = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ data: { session: null }, _timeout: true }), 4000)
+          )
+        ]);
 
-    // Restore existing session on mount
-    supabase.auth.getSession()
-      .then(async ({ data: { session }, error }) => {
         if (!mounted) return;
-        if (error) {
-          console.error("getSession error:", error.message);
+
+        if (sessionResult._timeout) {
+          console.warn("Auth init timed out — proceeding without session");
+          setLoading(false);
+          return;
         }
+
+        const session = sessionResult.data?.session;
         setUser(session?.user || null);
+
         if (session?.user) {
           const p = await loadProfile(
             session.user.id,
@@ -87,22 +82,20 @@ export function AuthProvider({ children }) {
           );
           if (mounted) setProfile(p);
         }
-      })
-      .catch((err) => {
-        console.error("getSession threw:", err);
-      })
-      .finally(() => {
-        if (mounted) {
-          clearTimeout(safetyTimeout);
-          setLoading(false);
-        }
-      });
+      } catch (err) {
+        console.error("initAuth threw:", err);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
 
-    // Listen for auth state changes
+    initAuth();
+
     const {
       data: { subscription }
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
+      console.log("Auth state changed:", event);
       setUser(session?.user || null);
       if (session?.user) {
         const p = await loadProfile(
@@ -114,12 +107,11 @@ export function AuthProvider({ children }) {
       } else {
         setProfile(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
 
     return () => {
       mounted = false;
-      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -146,18 +138,19 @@ export function AuthProvider({ children }) {
     }
     setUser(null);
     setProfile(null);
-    // Clear any cached storage and force reload to login page
     try {
       localStorage.clear();
       sessionStorage.clear();
     } catch (e) {
       // ignore
     }
-    // Force full reload to clear all React state and re-init from scratch
     window.location.href = "/";
   };
 
-  const isSuperAdmin = profile?.role === "super_admin";
+  // Super admin detection: by profile role OR by user email matching known owner
+  const isSuperAdmin =
+    profile?.role === "super_admin" ||
+    user?.email === "baruthdickson005@gmail.com";
 
   return (
     <AuthContext.Provider

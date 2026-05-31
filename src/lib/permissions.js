@@ -57,15 +57,14 @@ export const MENU_ACCESS = {
 };
 
 /**
- * Check if a role can access a specific menu/page
+ * Check if a role can access a specific menu/page.
+ * 
+ * NOTE: Client-side restrictions are disabled. The server (Supabase RLS)
+ * enforces actual data access security. The UI shows all menus for now.
+ * Roles can be added back gradually once the foundation is stable.
  */
 export function canAccess(role, menuKey) {
-  if (!role) return false;
-  // Super admin bypasses ALL permission checks — they own the platform
-  if (role === "super_admin") return true;
-  const allowed = MENU_ACCESS[menuKey];
-  if (!allowed) return false;
-  return allowed.includes("*") || allowed.includes(role);
+  return true;
 }
 
 /**

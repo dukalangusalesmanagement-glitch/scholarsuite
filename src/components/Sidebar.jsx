@@ -2,20 +2,14 @@ import * as Icons from "lucide-react";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import { menuGroups } from "../lib/menu";
-import { canAccess, getRoleLabel } from "../lib/permissions";
+import { getRoleLabel } from "../lib/permissions";
 
 export default function Sidebar({ view, setView, onClose }) {
   const { t, lang } = useLang();
-  const { profile } = useAuth();
-  const role = profile?.role;
+  const { profile, isSuperAdmin } = useAuth();
 
-  // Filter groups by role — only show groups that have at least one accessible item
-  const visibleGroups = menuGroups
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => canAccess(role, item.key))
-    }))
-    .filter((group) => group.items.length > 0);
+  // Show all menu groups — server-side RLS enforces actual data access
+  const visibleGroups = menuGroups;
 
   return (
     <aside
@@ -91,15 +85,30 @@ export default function Sidebar({ view, setView, onClose }) {
       {/* User mini */}
       <div className="border-t border-white/5 p-3">
         <div className="flex items-center gap-3 rounded-lg px-3 py-2.5 bg-white/5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-400 text-emerald-950 text-sm font-semibold">
+          <div
+            className="flex h-9 w-9 items-center justify-center rounded-full text-emerald-950 text-sm font-semibold relative"
+            style={{ background: isSuperAdmin ? "linear-gradient(135deg, #fbbf24, #d97706)" : "var(--green-400)" }}
+          >
             {(profile?.full_name || profile?.email || "U").slice(0, 1).toUpperCase()}
+            {isSuperAdmin && (
+              <span className="absolute -top-1 -right-1 h-4 w-4 rounded-full bg-yellow-500 flex items-center justify-center ring-2" style={{ ringColor: "var(--green-950)" }}>
+                <Icons.Crown className="h-2.5 w-2.5 text-white" />
+              </span>
+            )}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm text-white truncate">
-              {profile?.full_name || profile?.email || t.superAdmin}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm text-white truncate">
+                {profile?.full_name || profile?.email || (isSuperAdmin ? "Super Admin" : "User")}
+              </p>
+              {isSuperAdmin && (
+                <span className="text-[8px] uppercase tracking-wider px-1 py-0.5 rounded font-bold flex-shrink-0" style={{ background: "#fef3c7", color: "#92400e" }}>
+                  OWNER
+                </span>
+              )}
+            </div>
             <p className="text-[10px] uppercase tracking-wider text-emerald-300/80 truncate">
-              {getRoleLabel(profile?.role, lang)}
+              {getRoleLabel(profile?.role || (isSuperAdmin ? "super_admin" : null), lang)}
             </p>
           </div>
         </div>

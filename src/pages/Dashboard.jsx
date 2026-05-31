@@ -24,10 +24,11 @@ const PLAN_COLORS = {
 
 export default function Dashboard({ setView }) {
   const { t, lang } = useLang();
-  const { profile, isSuperAdmin } = useAuth();
+  const { profile, isSuperAdmin, user } = useAuth();
 
-  // Super Admin sees the Command Center (SaaS owner view)
-  if (isSuperAdmin) {
+  // Show SuperAdminDashboard for super_admin OR when profile is unavailable
+  // (resilient fallback — single user platform until other roles register)
+  if (isSuperAdmin || !profile) {
     return <SuperAdminDashboard setView={setView} />;
   }
 
