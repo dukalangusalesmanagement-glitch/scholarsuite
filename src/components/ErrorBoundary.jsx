@@ -12,7 +12,9 @@ export default class ErrorBoundary extends Component {
   }
 
   componentDidCatch(error, info) {
-    console.error("ErrorBoundary caught:", error, info);
+    console.error("ErrorBoundary caught:", error);
+    console.error("Component stack:", info?.componentStack);
+    this.setState({ errorInfo: info });
   }
 
   handleRefresh = () => {
@@ -57,13 +59,20 @@ export default class ErrorBoundary extends Component {
               Mfumo umekutana na tatizo. Hili linaweza kutokea kwa sababu ya session ya zamani au tatizo la muunganiko.
             </p>
 
-            {this.state.error?.message && (
-              <div className="p-3 rounded-lg bg-stone-50 border border-stone-200">
-                <p className="text-[11px] font-mono text-stone-600 break-words">
-                  {String(this.state.error.message).slice(0, 200)}
-                </p>
-              </div>
-            )}
+            <div className="p-3 rounded-lg bg-stone-50 border border-stone-200 space-y-1">
+              <p className="text-[10px] uppercase tracking-wide font-semibold text-stone-500">Error Details</p>
+              <p className="text-[11px] font-mono text-red-700 break-words">
+                {(this.state.error?.name || "Error") + ": " + String(this.state.error?.message || this.state.error || "Unknown error").slice(0, 300)}
+              </p>
+              {this.state.error?.stack && (
+                <details className="text-[10px] text-stone-500 mt-2">
+                  <summary className="cursor-pointer font-medium">Stack trace</summary>
+                  <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all max-h-48">
+                    {String(this.state.error.stack).slice(0, 1500)}
+                  </pre>
+                </details>
+              )}
+            </div>
 
             <div className="space-y-2">
               <button

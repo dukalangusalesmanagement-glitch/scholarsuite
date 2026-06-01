@@ -122,7 +122,7 @@ export default function Shell({ view, setView }) {
       )}
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header onMobileNav={() => setMobileNavOpen(true)} />
+        <Header onMobileNav={() => setMobileNavOpen(true)} setView={setView} />
         <main className="flex-1 overflow-y-auto">
           <div className="mx-auto max-w-7xl px-4 md:px-6 py-6 md:py-8">
             <Suspense fallback={<LoadingScreen />}>

@@ -2,17 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { useTheme } from "../contexts/ThemeContext";
-import { Link, useNavigate } from "react-router-dom";
 import {
   Search, Bell, Moon, Sun, Globe, ChevronDown, User,
   Settings, LogOut, Crown, AlertTriangle, Loader2
 } from "lucide-react";
 
-export default function Header() {
+export default function Header({ onMobileNav, setView }) {
   const { user, profile, isSuperAdmin, signOut } = useAuth();
   const { lang, setLang, t } = useLang();
-  const { theme, setTheme } = useTheme();
-  const navigate = useNavigate();
+  const { dark, setDark } = useTheme();
 
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -119,11 +117,11 @@ export default function Header() {
 
         {/* Theme toggle */}
         <button
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => setDark(!dark)}
           className="p-2 rounded-full text-stone-700 hover:bg-stone-100 transition"
           title="Theme"
         >
-          {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {dark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Notifications */}
@@ -189,14 +187,14 @@ export default function Header() {
               {/* Menu items */}
               <div className="py-1.5">
                 <button
-                  onClick={() => { setOpen(false); navigate("/settings"); }}
+                  onClick={() => { setOpen(false); if (setView) setView("settings"); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition"
                 >
                   <User className="w-4 h-4 text-stone-400" />
                   <span>{lang === "sw" ? "Wasifu" : "Profile"}</span>
                 </button>
                 <button
-                  onClick={() => { setOpen(false); navigate("/settings"); }}
+                  onClick={() => { setOpen(false); if (setView) setView("settings"); }}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-stone-700 hover:bg-stone-50 transition"
                 >
                   <Settings className="w-4 h-4 text-stone-400" />
