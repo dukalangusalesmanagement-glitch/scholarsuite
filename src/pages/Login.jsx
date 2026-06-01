@@ -1,245 +1,298 @@
 import { useState } from "react";
-import { Loader2, Globe, AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
+import {
+  Mail, Lock, Eye, EyeOff, Loader2, AlertCircle, CheckCircle2,
+  User, ArrowRight, Sparkles
+} from "lucide-react";
 
 export default function Login() {
-  const { t, lang, toggleLang } = useLang();
-  const { signIn, signUp } = useAuth();
-  const [mode, setMode] = useState("signin");
+  const { signIn, signUp, translateError } = useAuth();
+  const { lang, t } = useLang();
+
+  const [mode, setMode] = useState("signin"); // signin | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPwd, setConfirmPwd] = useState("");
   const [fullName, setFullName] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
+  const [err, setErr] = useState("");
   const [success, setSuccess] = useState("");
 
-  const submit = async (e) => {
-    e.preventDefault();
-    setError("");
-    setSuccess("");
+  const T = {
+    sw: {
+      welcome: "Karibu ClassLink",
+      subtitle: "Mfumo wa Usimamizi wa Shule",
+      signin: "Ingia",
+      signup: "Jisajili",
+      signinDesc: "Ingia kwenye akaunti yako",
+      signupDesc: "Tengeneza akaunti mpya",
+      fullName: "Jina kamili",
+      fullNamePh: "Jina lako la kamili",
+      email: "Barua pepe",
+      emailPh: "wewe@email.com",
+      password: "Nenosiri",
+      passwordPh: "Andika nenosiri lako",
+      passwordHint: "Angalau herufi 6",
+      forgotPw: "Umesahau nenosiri?",
+      signinBtn: "Ingia",
+      signupBtn: "Tengeneza Akaunti",
+      busy: "Inafanya kazi...",
+      noAccount: "Huna akaunti?",
+      hasAccount: "Una akaunti?",
+      switchToSignup: "Jisajili",
+      switchToSignin: "Ingia",
+      poweredBy: "Imeundwa kwa shule za Tanzania",
+      signupSuccess: "Akaunti imeundwa! Angalia email yako kwa uthibitishaji.",
+      missingFields: "Tafadhali jaza taarifa zote"
+    },
+    en: {
+      welcome: "Welcome to ClassLink",
+      subtitle: "School Management System",
+      signin: "Sign In",
+      signup: "Sign Up",
+      signinDesc: "Sign in to your account",
+      signupDesc: "Create a new account",
+      fullName: "Full Name",
+      fullNamePh: "Your full name",
+      email: "Email",
+      emailPh: "you@email.com",
+      password: "Password",
+      passwordPh: "Enter your password",
+      passwordHint: "At least 6 characters",
+      forgotPw: "Forgot password?",
+      signinBtn: "Sign In",
+      signupBtn: "Create Account",
+      busy: "Working...",
+      noAccount: "Don't have an account?",
+      hasAccount: "Already have an account?",
+      switchToSignup: "Sign up",
+      switchToSignin: "Sign in",
+      poweredBy: "Built for Tanzanian schools",
+      signupSuccess: "Account created! Check your email for verification.",
+      missingFields: "Please fill all fields"
+    }
+  };
+  const L = T[lang] || T.en;
 
-    if (mode === "signup" && password !== confirmPwd) {
-      setError(t.passwordMismatch);
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+    setErr(""); setSuccess("");
+    if (!email.trim() || !password) {
+      setErr(L.missingFields);
       return;
     }
-
+    if (mode === "signup" && !fullName.trim()) {
+      setErr(L.missingFields);
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "signin") {
-        const { error } = await signIn(email, password);
-        if (error) setError(error.message || t.invalidCreds);
+        await signIn(email, password);
+        // AuthProvider will update — App routes to dashboard
       } else {
-        const { error } = await signUp(email, password, { full_name: fullName });
-        if (error) setError(error.message);
-        else {
-          setSuccess(t.accountCreated);
-          setMode("signin");
-        }
+        await signUp(email, password, { full_name: fullName.trim() });
+        setSuccess(L.signupSuccess);
       }
+    } catch (e) {
+      console.error("Auth error:", e);
+      setErr(translateError(e.message, lang));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div
-      className="min-h-screen flex flex-col md:flex-row"
-      style={{ background: "var(--cream)" }}
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{
+        background:
+          "radial-gradient(circle at 20% 10%, rgba(16, 122, 87, 0.15), transparent 40%), radial-gradient(circle at 80% 90%, rgba(5, 88, 64, 0.18), transparent 40%), linear-gradient(135deg, #f6f4ef 0%, #ecf3ef 100%)"
+      }}
     >
-      {/* Left: hero panel */}
-      <div
-        className="hidden md:flex md:w-1/2 lg:w-3/5 flex-col justify-between p-10 lg:p-16 relative overflow-hidden"
-        style={{ background: "var(--green-950)" }}
-      >
-        <div className="relative z-10">
-          <img
-            src="/classlink-logo-white.svg"
-            alt="ClassLink"
-            className="h-10 w-auto"
-          />
-          <p className="text-[11px] uppercase tracking-[0.25em] text-emerald-300/70 mt-3 pl-1">
-            {t.tagline}
-          </p>
-        </div>
+      {/* Decorative blobs */}
+      <div className="absolute top-0 right-0 w-96 h-96 rounded-full opacity-20 blur-3xl"
+        style={{ background: "var(--green-700)" }} />
+      <div className="absolute bottom-0 left-0 w-96 h-96 rounded-full opacity-15 blur-3xl"
+        style={{ background: "var(--green-950)" }} />
 
-        <div className="relative z-10">
-          <h2 className="display text-4xl lg:text-6xl text-white leading-[1.05] max-w-xl">
-            One platform.
-            <br />
-            <span className="italic" style={{ color: "var(--green-300)" }}>
-              Every school
-            </span>{" "}
-            you manage.
-          </h2>
-          <p className="mt-6 text-emerald-100/70 max-w-lg leading-relaxed">
-            {t.welcomeMessage}
-          </p>
-
-          <div className="mt-12 grid grid-cols-3 gap-6 max-w-lg">
-            {[
-              { num: "30+", label: t.schools },
-              { num: "10k+", label: t.students },
-              { num: "99.9%", label: "uptime" }
-            ].map((s, i) => (
-              <div key={i}>
-                <p className="display text-3xl text-white">{s.num}</p>
-                <p className="text-xs uppercase tracking-wider text-emerald-300/60 mt-1">
-                  {s.label}
-                </p>
-              </div>
-            ))}
+      <div className="relative w-full max-w-md">
+        {/* Logo / Brand */}
+        <div className="text-center mb-6">
+          <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl shadow-lg mb-3"
+            style={{ background: "linear-gradient(135deg, var(--green-700), var(--green-950))" }}>
+            <span className="text-white font-bold text-xl" style={{ fontFamily: "Instrument Serif, serif" }}>CL</span>
           </div>
+          <h1 className="text-3xl font-semibold text-stone-900" style={{ fontFamily: "Instrument Serif, serif" }}>
+            {L.welcome}
+          </h1>
+          <p className="text-sm text-stone-500 mt-1 flex items-center justify-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" style={{ color: "var(--green-700)" }} />
+            {L.subtitle}
+          </p>
         </div>
 
-        <p className="relative z-10 text-xs text-emerald-300/40">
-          © {new Date().getFullYear()} {t.poweredBy}. {t.allRights}
-        </p>
+        {/* Card */}
+        <div className="bg-white/80 backdrop-blur-xl rounded-2xl shadow-xl border border-stone-200/60 overflow-hidden">
+          {/* Tab switcher */}
+          <div className="grid grid-cols-2 p-1.5 m-3 mb-0 rounded-xl bg-stone-100/80">
+            <button
+              type="button"
+              onClick={() => { setMode("signin"); setErr(""); setSuccess(""); }}
+              className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                mode === "signin"
+                  ? "bg-white shadow-sm text-stone-900"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              {L.signin}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setMode("signup"); setErr(""); setSuccess(""); }}
+              className={`py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                mode === "signup"
+                  ? "bg-white shadow-sm text-stone-900"
+                  : "text-stone-500 hover:text-stone-700"
+              }`}
+            >
+              {L.signup}
+            </button>
+          </div>
 
-        <div
-          className="absolute top-1/2 -right-32 w-96 h-96 rounded-full opacity-10"
-          style={{ background: "var(--green-400)", filter: "blur(80px)" }}
-        />
-      </div>
-
-      {/* Right: form */}
-      <div className="flex-1 flex flex-col">
-        <div className="flex justify-end p-4">
-          <button
-            onClick={toggleLang}
-            className="flex items-center gap-1.5 rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700 hover:bg-stone-50"
-          >
-            <Globe className="h-3.5 w-3.5" />
-            {lang.toUpperCase()}
-          </button>
-        </div>
-
-        <div className="flex-1 flex items-center justify-center px-6 pb-12">
-          <div className="w-full max-w-sm">
-            <div className="md:hidden mb-8 text-center">
-              <img
-                src="/classlink-logo.svg"
-                alt="ClassLink"
-                className="h-14 w-auto mx-auto"
-              />
+          <form onSubmit={handleSubmit} className="p-6 pt-4 space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-stone-900">
+                {mode === "signin" ? L.signinDesc : L.signupDesc}
+              </h2>
             </div>
 
-            <h2 className="display text-3xl" style={{ color: "var(--green-950)" }}>
-              {mode === "signin" ? t.signIn : t.createAccount}
-            </h2>
-            <p className="text-sm text-stone-500 mt-2">
-              {mode === "signin" ? t.welcome : t.tagline}
-            </p>
-
-            <form onSubmit={submit} className="mt-8 space-y-4">
-              {mode === "signup" && (
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 mb-1.5">
-                    {t.fullName}
-                  </label>
+            {/* Full name (signup only) */}
+            {mode === "signup" && (
+              <div>
+                <label className="block text-xs font-medium text-stone-700 mb-1.5">{L.fullName}</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                   <input
                     type="text"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                    placeholder={L.fullNamePh}
+                    autoComplete="name"
+                    className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 outline-none transition"
                   />
                 </div>
-              )}
+              </div>
+            )}
 
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 mb-1.5">
-                  {t.emailLabel}
-                </label>
+            {/* Email */}
+            <div>
+              <label className="block text-xs font-medium text-stone-700 mb-1.5">{L.email}</label>
+              <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required
+                  placeholder={L.emailPh}
                   autoComplete="email"
-                  className="w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                  required
+                  className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 outline-none transition"
                 />
               </div>
+            </div>
 
-              <div>
-                <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 mb-1.5">
-                  {t.passwordLabel}
-                </label>
+            {/* Password */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="block text-xs font-medium text-stone-700">{L.password}</label>
+                {mode === "signin" && (
+                  <button type="button" className="text-xs font-medium hover:underline" style={{ color: "var(--green-700)" }}>
+                    {L.forgotPw}
+                  </button>
+                )}
+              </div>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />
                 <input
-                  type="password"
+                  type={showPw ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  required
+                  placeholder={L.passwordPh}
                   autoComplete={mode === "signin" ? "current-password" : "new-password"}
-                  className="w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
+                  required
+                  className="w-full pl-10 pr-10 py-2.5 rounded-lg border border-stone-200 bg-white text-sm focus:border-emerald-600 focus:ring-2 focus:ring-emerald-100 outline-none transition"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPw(!showPw)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-600"
+                >
+                  {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
-
               {mode === "signup" && (
-                <div>
-                  <label className="block text-xs font-medium uppercase tracking-wider text-stone-600 mb-1.5">
-                    {t.confirmPassword}
-                  </label>
-                  <input
-                    type="password"
-                    value={confirmPwd}
-                    onChange={(e) => setConfirmPwd(e.target.value)}
-                    required
-                    className="w-full rounded-lg border border-stone-200 bg-white px-3.5 py-2.5 text-sm focus:border-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-600/20"
-                  />
-                </div>
+                <p className="text-[11px] text-stone-500 mt-1.5">{L.passwordHint}</p>
               )}
+            </div>
 
-              {error && (
-                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
-                  <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
+            {/* Error message */}
+            {err && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-800 text-xs">
+                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{err}</span>
+              </div>
+            )}
+
+            {/* Success message */}
+            {success && (
+              <div className="flex items-start gap-2 p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs">
+                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                <span>{success}</span>
+              </div>
+            )}
+
+            {/* Submit button */}
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-white shadow-sm hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+              style={{
+                background: "linear-gradient(135deg, var(--green-700), var(--green-950))"
+              }}
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{L.busy}</span>
+                </>
+              ) : (
+                <>
+                  <span>{mode === "signin" ? L.signinBtn : L.signupBtn}</span>
+                  <ArrowRight className="w-4 h-4" />
+                </>
               )}
-              {success && (
-                <div className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2.5 text-sm text-emerald-700">
-                  <CheckCircle2 className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                  <span>{success}</span>
-                </div>
-              )}
+            </button>
 
-              <button
-                type="submit"
-                disabled={busy}
-                className="w-full rounded-lg py-2.5 text-sm font-medium text-white transition disabled:opacity-60"
-                style={{ background: "var(--green-950)" }}
-              >
-                {busy ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    {t.signingIn}
-                  </span>
-                ) : mode === "signin" ? (
-                  t.signInBtn
-                ) : (
-                  t.createAccount
-                )}
-              </button>
-            </form>
-
-            <p className="mt-6 text-center text-sm text-stone-500">
-              {mode === "signin" ? t.dontHaveAccount : t.alreadyHaveAccount}{" "}
+            {/* Switch mode */}
+            <div className="text-center text-xs text-stone-500">
+              {mode === "signin" ? L.noAccount : L.hasAccount}{" "}
               <button
                 type="button"
-                onClick={() => {
-                  setMode(mode === "signin" ? "signup" : "signin");
-                  setError("");
-                  setSuccess("");
-                }}
+                onClick={() => { setMode(mode === "signin" ? "signup" : "signin"); setErr(""); setSuccess(""); }}
                 className="font-medium hover:underline"
                 style={{ color: "var(--green-700)" }}
               >
-                {mode === "signin" ? t.signUp : t.signInBtn}
+                {mode === "signin" ? L.switchToSignup : L.switchToSignin}
               </button>
-            </p>
-          </div>
+            </div>
+          </form>
         </div>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-stone-400 mt-4">
+          {L.poweredBy} · v1.0
+        </p>
       </div>
     </div>
   );
