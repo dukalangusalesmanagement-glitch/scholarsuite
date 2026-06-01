@@ -1,12 +1,60 @@
 import { useEffect, useState, useCallback } from "react";
-import { supabase } from "../lib/supabase";
 
 /**
- * Generic data-fetching hook for any Supabase table.
+ * Generic data-fetching hook using direct fetch (bypasses Supabase JS client).
  *
  * Usage:
  *   const { rows, loading, error, reload, create, update, remove } = useResource("students");
  */
+
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+// Get auth token from localStorage directly
+const getToken = () => {
+  try {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        const v = JSON.parse(localStorage.getItem(key));
+        if (v?.access_token) return v.access_token;
+      }
+    }
+  } catch {}
+  return SUPABASE_KEY;
+};
+
+// Direct fetch helper
+const directFetch = async (path, options = {}) => {
+  const token = getToken();
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(`${SUPABASE_URL}${path}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${token}`,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        ...(options.headers || {})
+      }
+    });
+    clearTimeout(timeoutId);
+    const text = await response.text();
+    let data;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+    if (!response.ok) {
+      const msg = (data && (data.message || data.error_description)) || `HTTP ${response.status}`;
+      return { data: null, error: { message: msg, status: response.status } };
+    }
+    return { data, error: null };
+  } catch (e) {
+    clearTimeout(timeoutId);
+    return { data: null, error: { message: e.name === "AbortError" ? "Request timed out" : e.message } };
+  }
+};
+
 export function useResource(table, opts = {}) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,21 +63,34 @@ export function useResource(table, opts = {}) {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let query = supabase.from(table).select(opts.select || "*");
-    if (opts.filters) {
-      for (const [col, val] of Object.entries(opts.filters)) {
-        query = query.eq(col, val);
+    try {
+      // Build query string
+      const params = new URLSearchParams();
+      params.set("select", opts.select || "*");
+      if (opts.filters) {
+        for (const [col, val] of Object.entries(opts.filters)) {
+          params.set(col, `eq.${val}`);
+        }
       }
-    }
-    if (opts.orderBy) {
-      query = query.order(opts.orderBy, { ascending: opts.ascending ?? false });
-    }
-    if (opts.limit) query = query.limit(opts.limit);
+      if (opts.orderBy) {
+        params.set("order", `${opts.orderBy}.${opts.ascending ? "asc" : "desc"}`);
+      }
+      if (opts.limit) params.set("limit", opts.limit);
 
-    const { data, error } = await query;
-    if (error) setError(error);
-    else setRows(data || []);
-    setLoading(false);
+      const { data, error } = await directFetch(`/rest/v1/${table}?${params.toString()}`);
+      if (error) {
+        setError(error);
+        setRows([]);
+      } else {
+        setRows(Array.isArray(data) ? data : []);
+      }
+    } catch (e) {
+      setError({ message: e.message });
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table, JSON.stringify(opts)]);
 
   useEffect(() => {
@@ -37,24 +98,31 @@ export function useResource(table, opts = {}) {
   }, [load]);
 
   const create = async (payload) => {
-    const { data, error } = await supabase.from(table).insert(payload).select().single();
-    if (!error) setRows((prev) => [data, ...prev]);
-    return { data, error };
+    const { data, error } = await directFetch(`/rest/v1/${table}`, {
+      method: "POST",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify(payload)
+    });
+    const single = Array.isArray(data) ? data[0] : data;
+    if (!error && single) setRows((prev) => [single, ...prev]);
+    return { data: single, error };
   };
 
   const update = async (id, payload) => {
-    const { data, error } = await supabase
-      .from(table)
-      .update(payload)
-      .eq("id", id)
-      .select()
-      .single();
-    if (!error) setRows((prev) => prev.map((r) => (r.id === id ? data : r)));
-    return { data, error };
+    const { data, error } = await directFetch(`/rest/v1/${table}?id=eq.${id}`, {
+      method: "PATCH",
+      headers: { "Prefer": "return=representation" },
+      body: JSON.stringify(payload)
+    });
+    const single = Array.isArray(data) ? data[0] : data;
+    if (!error && single) setRows((prev) => prev.map((r) => (r.id === id ? single : r)));
+    return { data: single, error };
   };
 
   const remove = async (id) => {
-    const { error } = await supabase.from(table).delete().eq("id", id);
+    const { error } = await directFetch(`/rest/v1/${table}?id=eq.${id}`, {
+      method: "DELETE"
+    });
     if (!error) setRows((prev) => prev.filter((r) => r.id !== id));
     return { error };
   };

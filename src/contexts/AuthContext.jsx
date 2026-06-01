@@ -103,20 +103,24 @@ export const AuthProvider = ({ children }) => {
 
   // Load profile via REST API
   const loadProfile = useCallback(async (userId, accessToken) => {
-    if (!userId || !accessToken) return null;
+    if (!userId || !accessToken) return { profile: null, valid: true };
     try {
-      const { ok, data } = await apiFetch(
+      const { ok, status, data } = await apiFetch(
         `/rest/v1/profiles?id=eq.${userId}&select=*`,
         { headers: { "Authorization": `Bearer ${accessToken}` } },
         8000
       );
-      if (ok && Array.isArray(data) && data.length > 0) {
-        return data[0];
+      // 401 = invalid/expired token — session is bad
+      if (status === 401 || status === 403) {
+        return { profile: null, valid: false };
       }
-      return null;
+      if (ok && Array.isArray(data) && data.length > 0) {
+        return { profile: data[0], valid: true };
+      }
+      return { profile: null, valid: true };
     } catch (e) {
       console.warn("Profile load failed:", e);
-      return null;
+      return { profile: null, valid: true };
     }
   }, []);
 
@@ -126,16 +130,29 @@ export const AuthProvider = ({ children }) => {
     const init = async () => {
       const session = getStoredSession();
       if (session?.user && session?.access_token) {
+        // Validate session by loading profile
+        const { profile: p, valid } = await loadProfile(session.user.id, session.access_token);
         if (cancelled) return;
-        setUser(session.user);
-        setSessionToken(session.access_token);
-        const p = await loadProfile(session.user.id, session.access_token);
-        if (cancelled) return;
-        setProfile(p);
+
+        if (!valid) {
+          // Session is bad — clear it
+          console.warn("Session invalid, clearing storage");
+          setStoredSession(null);
+          setUser(null);
+          setProfile(null);
+          setSessionToken(null);
+        } else {
+          setUser(session.user);
+          setSessionToken(session.access_token);
+          setProfile(p);
+        }
       }
       if (!cancelled) setLoading(false);
     };
-    init();
+    init().catch((e) => {
+      console.error("Auth init error:", e);
+      if (!cancelled) setLoading(false);
+    });
     return () => { cancelled = true; };
   }, [loadProfile]);
 
@@ -153,7 +170,7 @@ export const AuthProvider = ({ children }) => {
     setStoredSession(data);
     setUser(data.user);
     setSessionToken(data.access_token);
-    const p = await loadProfile(data.user.id, data.access_token);
+    const { profile: p } = await loadProfile(data.user.id, data.access_token);
     setProfile(p);
     return data;
   };
@@ -173,7 +190,7 @@ export const AuthProvider = ({ children }) => {
       setStoredSession(data.session);
       setUser(data.user);
       setSessionToken(data.session.access_token);
-      const p = await loadProfile(data.user.id, data.session.access_token);
+      const { profile: p } = await loadProfile(data.user.id, data.session.access_token);
       setProfile(p);
     }
     return data;
