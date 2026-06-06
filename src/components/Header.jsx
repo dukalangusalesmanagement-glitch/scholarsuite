@@ -2,16 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { useSchool } from "../hooks/useSchool";
 import { getRoleLabel } from "../lib/permissions";
 import {
   Search, Bell, Moon, Sun, Globe, ChevronDown, User,
-  Settings, LogOut, Crown, AlertTriangle, Loader2
+  Settings, LogOut, Crown, AlertTriangle, Loader2, Building2, Sparkles
 } from "lucide-react";
 
 export default function Header({ onMobileNav, setView }) {
   const { user, profile, isSuperAdmin, signOut } = useAuth();
   const { lang, setLang, t } = useLang();
   const { dark, setDark } = useTheme();
+  const { schoolName, isPlatform } = useSchool();
 
   const [open, setOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -57,6 +59,22 @@ export default function Header({ onMobileNav, setView }) {
 
   return (
     <div className="flex items-center justify-between gap-4 px-6 py-3 bg-white/70 backdrop-blur-md border-b border-stone-200 sticky top-0 z-30">
+      {/* Context pill — shows what scope user is operating in */}
+      <div className="flex items-center gap-3 flex-shrink-0">
+        {isPlatform ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm"
+            style={{ background: "linear-gradient(135deg, #fbbf24, #d97706)", color: "#1c1917" }}>
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{lang === "sw" ? "Mfumo wa SaaS" : "Platform Owner"}</span>
+          </div>
+        ) : schoolName ? (
+          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-50 border border-emerald-200">
+            <Building2 className="w-3.5 h-3.5 text-emerald-700" />
+            <span className="text-xs font-semibold text-emerald-900 truncate max-w-[200px]">{schoolName}</span>
+          </div>
+        ) : null}
+      </div>
+
       {/* Search */}
       <div className="flex-1 max-w-xl relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400" />

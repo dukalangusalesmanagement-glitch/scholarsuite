@@ -1,20 +1,50 @@
 /**
- * Sidebar navigation configuration
- * Menu access per role is enforced via src/lib/permissions.js
+ * Sidebar navigation configuration.
+ * Two distinct menu sets:
+ *
+ *   PLATFORM_MENU   - For Super Admin (SaaS owner). Platform/technical only.
+ *                     NO school operations. Manages tenants, subscriptions, system.
+ *
+ *   SCHOOL_MENU     - For everyone inside a school (director, head teacher,
+ *                     accountant, teachers, etc). School operations only.
+ *                     Items filtered further by role in Sidebar via canAccess().
  */
 
-export const menuGroups = [
+// Super Admin sees ONLY platform-level features
+export const PLATFORM_MENU = [
   {
-    label: { en: "Overview", sw: "Muhtasari" },
+    label: { en: "Platform", sw: "Mfumo wa SaaS" },
     items: [
       { key: "dashboard", icon: "LayoutDashboard", labelKey: "overview" }
     ]
   },
   {
-    label: { en: "Tenants", sw: "Wateja" },
+    label: { en: "Tenant Management", sw: "Usimamizi wa Shule" },
     items: [
       { key: "schools", icon: "Building2", labelKey: "schools" },
       { key: "subscriptions", icon: "CreditCard", labelKey: "subscriptionsNav" }
+    ]
+  },
+  {
+    label: { en: "Analytics", sw: "Uchambuzi" },
+    items: [
+      { key: "reports", icon: "FileBarChart", labelKey: "reports" }
+    ]
+  },
+  {
+    label: { en: "System", sw: "Mfumo" },
+    items: [
+      { key: "settings", icon: "Settings", labelKey: "settings" }
+    ]
+  }
+];
+
+// School users see school operations (filtered by role)
+export const SCHOOL_MENU = [
+  {
+    label: { en: "Overview", sw: "Muhtasari" },
+    items: [
+      { key: "dashboard", icon: "LayoutDashboard", labelKey: "overview" }
     ]
   },
   {
@@ -63,4 +93,17 @@ export const menuGroups = [
   }
 ];
 
-export default menuGroups;
+// Backward-compat alias (some code still imports menuGroups)
+export const menuGroups = SCHOOL_MENU;
+
+/**
+ * Pick which menu the user should see.
+ * Super Admin -> platform menu (no school operations)
+ * Everyone else -> school menu (filtered further by role)
+ */
+export function getMenuForUser({ role, isSuperAdmin }) {
+  if (isSuperAdmin === true || role === "super_admin") return PLATFORM_MENU;
+  return SCHOOL_MENU;
+}
+
+export default { PLATFORM_MENU, SCHOOL_MENU, menuGroups, getMenuForUser };

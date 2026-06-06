@@ -31,34 +31,49 @@ export const ROLES = {
  * Key = menu item key (matches src/lib/menu.js & Shell routes)
  * Value = array of roles allowed. "*" means everyone.
  *
+ * IMPORTANT: super_admin is INTENTIONALLY excluded from school-level menus.
+ * Super Admin is the SaaS platform owner — they manage tenants, subscriptions,
+ * and system health. They do NOT participate in daily school operations
+ * (registering students, marking attendance, entering grades, etc.).
+ * Those belong to in-school roles (head_teacher, teachers, accountants, etc.).
+ *
+ * Platform-only keys are: dashboard, schools, subscriptions, reports, settings
+ *
  * Backward-compatible role names included so existing DB roles continue to work:
- *   teacher → subject_teacher (added)
- *   academic_head → academic_master (added)
- *   hostel_warden → hostel_manager (added)
- *   transport_officer → transport_manager (added)
+ *   teacher → subject_teacher
+ *   academic_head → academic_master
+ *   hostel_warden → hostel_manager
+ *   transport_officer → transport_manager
  */
 export const MENU_ACCESS = {
+  // Platform-level (super admin + relevant role)
   dashboard: ["*"],
-  schools: ["super_admin", "school_director"],
+  schools: ["super_admin"],
   subscriptions: ["super_admin"],
-  staff: ["super_admin", "school_director", "head_teacher", "hr_officer"],
-  students: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "secretary", "receptionist", "nurse"],
-  teachers: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "hr_officer"],
-  classes: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head"],
-  subjects: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head"],
-  attendance: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "subject_teacher", "teacher"],
-  exams: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
-  timetable: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
-  fees: ["super_admin", "school_director", "head_teacher", "accountant"],
-  library: ["super_admin", "school_director", "head_teacher", "librarian"],
-  hostel: ["super_admin", "school_director", "head_teacher", "hostel_manager", "hostel_warden"],
-  transport: ["super_admin", "school_director", "head_teacher", "transport_manager", "transport_officer"],
-  payroll: ["super_admin", "school_director", "head_teacher", "accountant", "hr_officer"],
-  inventory: ["super_admin", "school_director", "head_teacher", "store_keeper"],
-  discipline: ["super_admin", "school_director", "head_teacher", "class_teacher"],
-  events: ["super_admin", "school_director", "head_teacher", "secretary"],
-  communications: ["super_admin", "school_director", "head_teacher", "secretary", "class_teacher"],
+
+  // School-level (NO super_admin — they're not in-school staff)
+  staff: ["school_director", "head_teacher", "hr_officer"],
+  students: ["school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "secretary", "receptionist", "nurse"],
+  teachers: ["school_director", "head_teacher", "academic_master", "academic_head", "hr_officer"],
+  classes: ["school_director", "head_teacher", "academic_master", "academic_head"],
+  subjects: ["school_director", "head_teacher", "academic_master", "academic_head"],
+  attendance: ["school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "subject_teacher", "teacher"],
+  exams: ["school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
+  timetable: ["school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
+  fees: ["school_director", "head_teacher", "accountant"],
+  library: ["school_director", "head_teacher", "librarian"],
+  hostel: ["school_director", "head_teacher", "hostel_manager", "hostel_warden"],
+  transport: ["school_director", "head_teacher", "transport_manager", "transport_officer"],
+  payroll: ["school_director", "head_teacher", "accountant", "hr_officer"],
+  inventory: ["school_director", "head_teacher", "store_keeper"],
+  discipline: ["school_director", "head_teacher", "class_teacher"],
+  events: ["school_director", "head_teacher", "secretary"],
+  communications: ["school_director", "head_teacher", "secretary", "class_teacher"],
+
+  // Platform analytics — super admin sees SaaS-wide; school admins see their school
   reports: ["super_admin", "school_director", "head_teacher", "accountant", "academic_master", "academic_head"],
+
+  // Settings — everyone has their own
   settings: ["*"]
 };
 
@@ -69,6 +84,10 @@ const SUPER_ADMIN_EMAILS = ["baruthdickson005@gmail.com"];
  * Check if a user can access a specific menu/page.
  * Accepts either (ctx, key) where ctx = { role, email, isSuperAdmin },
  * OR legacy (role, key) signature.
+ *
+ * Note: Super Admin is NOT auto-granted everything. They have their own
+ * platform-level menus (schools, subscriptions, etc) explicitly listed in
+ * MENU_ACCESS. School operations are deliberately not in super_admin's scope.
  */
 export function canAccess(ctxOrRole, menuKey) {
   if (!menuKey) return false;
@@ -83,17 +102,20 @@ export function canAccess(ctxOrRole, menuKey) {
     role = ctxOrRole;
   }
 
-  // Super admin sees everything
-  if (isSuperAdmin === true) return true;
-  if (role === "super_admin") return true;
-  if (email && SUPER_ADMIN_EMAILS.includes(String(email).toLowerCase())) return true;
+  // Resolve effective role: email fallback for Baruth maps to super_admin
+  let effectiveRole = role;
+  if (!effectiveRole) {
+    if (isSuperAdmin === true) effectiveRole = "super_admin";
+    else if (email && SUPER_ADMIN_EMAILS.includes(String(email).toLowerCase())) {
+      effectiveRole = "super_admin";
+    }
+  }
 
-  // Wildcard means everyone
   const allowed = MENU_ACCESS[menuKey];
   if (!allowed) return false;
   if (allowed.includes("*")) return true;
 
-  return Boolean(role) && allowed.includes(role);
+  return Boolean(effectiveRole) && allowed.includes(effectiveRole);
 }
 
 /**
