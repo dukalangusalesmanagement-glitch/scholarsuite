@@ -30,41 +30,70 @@ export const ROLES = {
  * Menu access matrix.
  * Key = menu item key (matches src/lib/menu.js & Shell routes)
  * Value = array of roles allowed. "*" means everyone.
+ *
+ * Backward-compatible role names included so existing DB roles continue to work:
+ *   teacher → subject_teacher (added)
+ *   academic_head → academic_master (added)
+ *   hostel_warden → hostel_manager (added)
+ *   transport_officer → transport_manager (added)
  */
 export const MENU_ACCESS = {
   dashboard: ["*"],
   schools: ["super_admin", "school_director"],
   subscriptions: ["super_admin"],
   staff: ["super_admin", "school_director", "head_teacher", "hr_officer"],
-  students: ["super_admin", "school_director", "head_teacher", "academic_master", "class_teacher", "secretary"],
-  teachers: ["super_admin", "school_director", "head_teacher", "hr_officer"],
-  classes: ["super_admin", "school_director", "head_teacher", "academic_master"],
-  subjects: ["super_admin", "school_director", "head_teacher", "academic_master"],
-  attendance: ["super_admin", "school_director", "head_teacher", "academic_master", "class_teacher", "subject_teacher"],
-  exams: ["super_admin", "school_director", "head_teacher", "academic_master", "subject_teacher"],
-  timetable: ["super_admin", "school_director", "head_teacher", "academic_master", "subject_teacher", "class_teacher"],
+  students: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "secretary", "receptionist", "nurse"],
+  teachers: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "hr_officer"],
+  classes: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head"],
+  subjects: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head"],
+  attendance: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "class_teacher", "subject_teacher", "teacher"],
+  exams: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
+  timetable: ["super_admin", "school_director", "head_teacher", "academic_master", "academic_head", "subject_teacher", "teacher", "class_teacher"],
   fees: ["super_admin", "school_director", "head_teacher", "accountant"],
   library: ["super_admin", "school_director", "head_teacher", "librarian"],
-  hostel: ["super_admin", "school_director", "head_teacher", "hostel_manager"],
-  transport: ["super_admin", "school_director", "head_teacher", "transport_manager"],
+  hostel: ["super_admin", "school_director", "head_teacher", "hostel_manager", "hostel_warden"],
+  transport: ["super_admin", "school_director", "head_teacher", "transport_manager", "transport_officer"],
   payroll: ["super_admin", "school_director", "head_teacher", "accountant", "hr_officer"],
   inventory: ["super_admin", "school_director", "head_teacher", "store_keeper"],
   discipline: ["super_admin", "school_director", "head_teacher", "class_teacher"],
   events: ["super_admin", "school_director", "head_teacher", "secretary"],
-  communications: ["super_admin", "school_director", "head_teacher", "secretary"],
-  reports: ["super_admin", "school_director", "head_teacher", "accountant", "academic_master"],
+  communications: ["super_admin", "school_director", "head_teacher", "secretary", "class_teacher"],
+  reports: ["super_admin", "school_director", "head_teacher", "accountant", "academic_master", "academic_head"],
   settings: ["*"]
 };
 
+// Emails granted super-admin regardless of DB role
+const SUPER_ADMIN_EMAILS = ["baruthdickson005@gmail.com"];
+
 /**
- * Check if a role can access a specific menu/page.
- * 
- * NOTE: Client-side restrictions are disabled. The server (Supabase RLS)
- * enforces actual data access security. The UI shows all menus for now.
- * Roles can be added back gradually once the foundation is stable.
+ * Check if a user can access a specific menu/page.
+ * Accepts either (ctx, key) where ctx = { role, email, isSuperAdmin },
+ * OR legacy (role, key) signature.
  */
-export function canAccess(role, menuKey) {
-  return true;
+export function canAccess(ctxOrRole, menuKey) {
+  if (!menuKey) return false;
+
+  // Normalize args — support both signatures
+  let role, email, isSuperAdmin;
+  if (typeof ctxOrRole === "object" && ctxOrRole !== null) {
+    role = ctxOrRole.role;
+    email = ctxOrRole.email;
+    isSuperAdmin = ctxOrRole.isSuperAdmin;
+  } else {
+    role = ctxOrRole;
+  }
+
+  // Super admin sees everything
+  if (isSuperAdmin === true) return true;
+  if (role === "super_admin") return true;
+  if (email && SUPER_ADMIN_EMAILS.includes(String(email).toLowerCase())) return true;
+
+  // Wildcard means everyone
+  const allowed = MENU_ACCESS[menuKey];
+  if (!allowed) return false;
+  if (allowed.includes("*")) return true;
+
+  return Boolean(role) && allowed.includes(role);
 }
 
 /**

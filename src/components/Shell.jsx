@@ -95,11 +95,13 @@ function AccessDenied({ onBack }) {
 
 export default function Shell({ view, setView }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const { profile } = useAuth();
-  const role = profile?.role;
+  const { user, profile, isSuperAdmin } = useAuth();
 
-  // If user lands on an unauthorized page, redirect to dashboard
-  const allowed = canAccess(role, view);
+  // If user lands on an unauthorized page, show Access Denied
+  const allowed = canAccess(
+    { role: profile?.role, email: user?.email, isSuperAdmin },
+    view
+  );
   const Page = ROUTES[view] || Dashboard;
 
   return (

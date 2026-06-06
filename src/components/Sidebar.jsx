@@ -1,15 +1,30 @@
 import * as Icons from "lucide-react";
+import { useMemo } from "react";
 import { useLang } from "../contexts/LangContext";
 import { useAuth } from "../contexts/AuthContext";
 import { menuGroups } from "../lib/menu";
-import { getRoleLabel } from "../lib/permissions";
+import { getRoleLabel, canAccess } from "../lib/permissions";
 
 export default function Sidebar({ view, setView, onClose }) {
   const { t, lang } = useLang();
-  const { profile, isSuperAdmin } = useAuth();
+  const { user, profile, isSuperAdmin } = useAuth();
 
-  // Show all menu groups — server-side RLS enforces actual data access
-  const visibleGroups = menuGroups;
+  // Build user context for permission checks
+  const ctx = useMemo(() => ({
+    role: profile?.role,
+    email: user?.email,
+    isSuperAdmin
+  }), [profile?.role, user?.email, isSuperAdmin]);
+
+  // Filter menu items by role — hide groups that have no visible items
+  const visibleGroups = useMemo(() => {
+    return menuGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => canAccess(ctx, item.key))
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [ctx]);
 
   return (
     <aside

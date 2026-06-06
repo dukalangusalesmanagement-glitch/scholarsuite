@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { useLang } from "../contexts/LangContext";
 import { useTheme } from "../contexts/ThemeContext";
+import { getRoleLabel } from "../lib/permissions";
 import {
   Search, Bell, Moon, Sun, Globe, ChevronDown, User,
   Settings, LogOut, Crown, AlertTriangle, Loader2
@@ -52,44 +53,7 @@ export default function Header({ onMobileNav, setView }) {
     }
   };
 
-  const roleLabel = (() => {
-    const r = profile?.role;
-    if (!r) return null;
-    const map = lang === "sw" ? {
-      super_admin: "Msimamizi Mkuu",
-      head_teacher: "Mwalimu Mkuu",
-      academic_head: "Mkuu wa Taaluma",
-      accountant: "Mhasibu",
-      teacher: "Mwalimu",
-      class_teacher: "Mwalimu wa Darasa",
-      librarian: "Mkutubi",
-      hostel_warden: "Msimamizi Mabweni",
-      transport_officer: "Afisa Usafiri",
-      hr_officer: "Afisa HR",
-      counselor: "Mshauri",
-      receptionist: "Mpokeaji",
-      parent: "Mzazi",
-      student: "Mwanafunzi",
-      viewer: "Mtazamaji"
-    } : {
-      super_admin: "Super Admin",
-      head_teacher: "Head Teacher",
-      academic_head: "Academic Head",
-      accountant: "Accountant",
-      teacher: "Teacher",
-      class_teacher: "Class Teacher",
-      librarian: "Librarian",
-      hostel_warden: "Hostel Warden",
-      transport_officer: "Transport Officer",
-      hr_officer: "HR Officer",
-      counselor: "Counselor",
-      receptionist: "Receptionist",
-      parent: "Parent",
-      student: "Student",
-      viewer: "Viewer"
-    };
-    return map[r] || r;
-  })();
+  const roleLabel = profile?.role ? getRoleLabel(profile.role, lang) : null;
 
   return (
     <div className="flex items-center justify-between gap-4 px-6 py-3 bg-white/70 backdrop-blur-md border-b border-stone-200 sticky top-0 z-30">
